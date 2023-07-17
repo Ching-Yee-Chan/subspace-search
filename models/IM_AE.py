@@ -144,6 +144,13 @@ class im_network(nn.Module):
 
 class IM_AE(object):
 	def __init__(self, config):
+
+		self.latent_size = 256
+		self.data_size = None
+		self.data_dim = None
+		self.expected_distance = 3.19
+		self.use_approx = config.use_approx
+
 		#progressive training
 		#1-- (16, 16*16*16)
 		#2-- (32, 16*16*16)
@@ -169,23 +176,27 @@ class IM_AE(object):
 		self.point_dim = 3
 
 		self.dataset_name = config.dataset
-		self.dataset_load = self.dataset_name + '_train'
-		if not (config.train or config.getz):
-			self.dataset_load = self.dataset_name + '_test'
+		# self.dataset_load = self.dataset_name + '_train'
+		# if not (config.train or config.getz):
+		# 	self.dataset_load = self.dataset_name + '_test'
 		self.checkpoint_dir = config.checkpoint_dir
-		self.data_dir = config.data_dir
+		# self.data_dir = config.data_dir
 		
-		data_hdf5_name = self.data_dir+'/'+self.dataset_load+'.hdf5'
-		if os.path.exists(data_hdf5_name):
-			data_dict = h5py.File(data_hdf5_name, 'r')
-			self.data_points = (data_dict['points_'+str(self.sample_vox_size)][:].astype(np.float32)+0.5)/256-0.5
-			self.data_values = data_dict['values_'+str(self.sample_vox_size)][:].astype(np.float32)
-			self.data_voxels = data_dict['voxels'][:]
-			#reshape to NCHW
-			self.data_voxels = np.reshape(self.data_voxels, [-1,1,self.input_size,self.input_size,self.input_size])
-		else:
-			print("error: cannot load "+data_hdf5_name)
-			exit(0)
+		# data_hdf5_name = self.data_dir+'/'+self.dataset_load+'.hdf5'
+		# if os.path.exists(data_hdf5_name):
+		# 	data_dict = h5py.File(data_hdf5_name, 'r')
+		# 	self.data_points = (data_dict['points_'+str(self.sample_vox_size)][:].astype(np.float32)+0.5)/256-0.5
+		# 	self.data_values = data_dict['values_'+str(self.sample_vox_size)][:].astype(np.float32)
+		# 	self.data_voxels = data_dict['voxels'][:]
+		# 	#reshape to NCHW
+		# 	self.data_voxels = np.reshape(self.data_voxels, [-1,1,self.input_size,self.input_size,self.input_size])
+		# else:
+		# 	print("error: cannot load "+data_hdf5_name)
+		# 	exit(0)
+
+		# load trained z
+		hdf5_path = self.checkpoint_dir+'/'+self.model_dir+'/'+self.dataset_name+'_train_z.hdf5'
+		self.zs = h5py.File(hdf5_path, mode='r')["zs"]
 
 
 		if torch.cuda.is_available():
@@ -213,6 +224,18 @@ class IM_AE(object):
 			return torch.mean((G-point_value)**2)
 		self.loss = network_loss
 
+
+		#load previous checkpoint
+		checkpoint_txt = os.path.join(self.checkpoint_path, "checkpoint")
+		if os.path.exists(checkpoint_txt):
+			fin = open(checkpoint_txt)
+			model_dir = fin.readline().strip()
+			fin.close()
+			self.im_network.load_state_dict(torch.load(model_dir, map_location=torch.device('cpu')))
+			print(" [*] Load SUCCESS")
+		else:
+			print(" [!] Load failed...")
+			exit(0)
 
 		#keep everything a power of 2
 		self.cell_grid_size = 4
@@ -669,3 +692,51 @@ class IM_AE(object):
 			print("[sample Z]")
 
 
+	def get_random_latent(self):
+		# return torch.randn(self.z_dim) * (0.2**0.5)
+		return torch.from_numpy(self.zs[0, :])
+
+
+	def decode(self, latent_vector):
+		# return self.z2voxel(torch.from_numpy(latent_vector))
+		return self.z2voxel(latent_vector)[None, :]
+	
+	
+	def calc_model_gradient(self, latent_vector):
+
+		def _forward_model(z, point_coord):
+			_, model_out_ = self.im_network(None, z, point_coord, is_training=False)
+			return model_out_
+
+		dimf = self.frame_grid_size
+		frame_batch_num = int(dimf**3/self.test_point_batch_size)
+		assert frame_batch_num>0
+		if self.use_approx:
+			idx = np.random.choice(dimf**3, 50, replace=False)
+		else:
+			idx = np.arange(dimf**3)
+
+		counter = 0
+		gradient = np.zeros((idx.shape[0], self.z_dim))
+		for i in range(frame_batch_num):
+			mask = (idx >= i * self.test_point_batch_size) & (idx < (i + 1) * self.test_point_batch_size)
+			tmp_idx = idx[mask]	#[N_i, ]
+			point_coord = self.frame_coords[tmp_idx]
+			point_coord = np.expand_dims(point_coord, axis=0)
+			point_coord = torch.from_numpy(point_coord)
+			point_coord = point_coord.to(self.device)
+			z = latent_vector.reshape(1, -1)
+			z = z.to(self.device)
+			z.requires_grad = True
+			from torch.func import jacrev, jacfwd
+			tmp_gradient = jacfwd(_forward_model, argnums=0)(z, point_coord)
+			tmp_gradient = tmp_gradient.reshape(-1, self.z_dim)
+			# # forward
+			# _, model_out_ = self.im_network(None, z, point_coord, is_training=False)
+			# model_out_ = model_out_.flatten()
+			# # backward
+			# tmp_gradient = torch.autograd.grad(model_out_, latent_vector, torch.ones_like(model_out_))
+			gradient[counter:counter + tmp_gradient.shape[0], :] = tmp_gradient.detach().numpy()
+			counter += tmp_gradient.shape[0]
+		return gradient
+	

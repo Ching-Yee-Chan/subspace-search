@@ -78,7 +78,7 @@ if __name__ == "__main__":
         parser.add_argument("--learning_rate", action="store", dest="learning_rate", default=0.00005, type=float, help="Learning rate for adam [0.00005]")
         parser.add_argument("--beta1", action="store", dest="beta1", default=0.5, type=float, help="Momentum term of adam [0.5]")
         parser.add_argument("--dataset", action="store", dest="dataset", default="all_vox256_img", help="The name of dataset")
-        parser.add_argument("--checkpoint_dir", action="store", dest="checkpoint_dir", default="checkpoint", help="Directory name to save the checkpoints [checkpoint]")
+        parser.add_argument("--checkpoint_dir", action="store", dest="checkpoint_dir", default="../checkpoint", help="Directory name to save the checkpoints [checkpoint]")
         parser.add_argument("--data_dir", action="store", dest="data_dir", default="../data/all_vol256_img/", help="Root directory of dataset [data]")
         parser.add_argument("--sample_dir", action="store", dest="sample_dir", default="../samples/im_ae_out", help="Directory name to save the image samples [samples]")
         parser.add_argument("--sample_vox_size", action="store", dest="sample_vox_size", default=64, type=int, help="Voxel resolution for coarse-to-fine training [64]")
@@ -88,6 +88,7 @@ if __name__ == "__main__":
         parser.add_argument("--ae", action="store_true", dest="ae", default=True, help="True for ae [False]")
         parser.add_argument("--svr", action="store_true", dest="svr", default=False, help="True for svr [False]")
         parser.add_argument("--getz", action="store_true", dest="getz", default=True, help="True for getting latent codes [False]")
+        parser.add_argument("--use_approx", action="store_true", dest="use_approx", default=args.use_approx, help="True for using approximation")
         FLAGS = parser.parse_known_args()[0]
         model = IM_AE(FLAGS)
         title = "IM-GAN"
@@ -97,7 +98,7 @@ if __name__ == "__main__":
         ui_window = ImageSearchUI(model, output_path)
     elif dataset == 'GANSynth':
         ui_window = AudioSearchUI(model, output_path, 16000)
-    elif dataset == 'IMGAN_flight' or dataset == 'IMGAN_chair':
+    elif dataset == 'IMGAN_flight' or dataset == 'IMGAN_chair' or dataset == 'IM-AE':
         ui_window = OpenGLSearchUI(model, output_path)
     # ui_window.setWindowTitle(title)
     ui_window.setWindowTitle("Differential Subspace Search")

@@ -7,6 +7,8 @@ from utils.utils import *
 from utils.QtPlot import QtPlot
 from utils.MyDialog import MyDialog
 
+from utils.model_utils import *
+
 from enum import Enum
 class State(Enum):
     UNINITIALIZED = 0
@@ -62,10 +64,10 @@ class SearchUI(QtWidgets.QWidget):
         self.show()
 
     def initUI(self):
-        # self.main_width = 250
-        # self.main_height = 250
-        self.main_width = 380
-        self.main_height = 325
+        # self.main_width = 380
+        # self.main_height = 325
+        self.main_width = 760
+        self.main_height = 650
         self.setGeometry(600, 515, self.main_width, self.main_height)
 
         main_layout = QtWidgets.QVBoxLayout()
@@ -157,6 +159,7 @@ class SearchUI(QtWidgets.QWidget):
         idx = np.random.choice(choice_p.shape[0], p=choice_p)
 
         self.subspace_basis = vh[idx]
+        self.subspace_basis = self.subspace_basis.astype(np.float32)
 
         self.jacobian_mask[np.arange(self.jacobian_vhs.shape[0])[self.jacobian_mask][idx]] = False
 
@@ -376,6 +379,9 @@ class OpenGLSearchUI(SearchUI):
             thres = 0.5
             if self.current_updated_flag:
                 vertices, triangles = mcubes.marching_cubes(self.current_data, thres)
+                vertices = (vertices.astype(np.float32)-0.5)/4-0.5
+			    #vertices = self.optimize_mesh(vertices,model_z)
+                # write_ply_triangle(self.output_base_path+"/"+"out"+str(0)+".ply", vertices, triangles)
                 self.opengl_widget.setObj(0, vertices, triangles, focus=True)
                 self.current_updated_flag = False
 

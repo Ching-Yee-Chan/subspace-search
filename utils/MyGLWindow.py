@@ -1,4 +1,6 @@
 import sys, os
+
+from PyQt5 import QtGui
 sys.path.append(os.path.abspath('../utils'))
 
 from OpenGL.GL import *
@@ -139,6 +141,7 @@ class MyGLWindow(QGLWidget):
 
     def __init__(self, obj_num, camera_dist=60):
         super(MyGLWindow, self).__init__()
+        # self.resize(1600, 1800)
         self.obj_num = obj_num
         self.objs = []
         for i in range(obj_num):
@@ -224,6 +227,10 @@ class MyGLWindow(QGLWidget):
     def mouseReleaseEvent(self, event):
         self.is_rotate = False
         self.is_pan = False
+    
+    def wheelEvent(self, event):
+        self.camera.zoom(event.angleDelta().y())
+        self.repaint()
 
     def setObj(self, idx, vertices, faces, normals=None, focus=False):
         self.shaderProgram.bind()
