@@ -241,7 +241,7 @@ class IM_AE(object):
 		self.cell_grid_size = 4
 		self.frame_grid_size = 64
 		self.real_size = self.cell_grid_size*self.frame_grid_size #=256, output point-value voxel grid size in testing
-		self.test_size = 32 #related to testing batch_size, adjust according to gpu memory size
+		self.test_size = 64 #related to testing batch_size, adjust according to gpu memory size
 		self.test_point_batch_size = self.test_size*self.test_size*self.test_size #do not change
 
 		#get coords for training
@@ -694,7 +694,7 @@ class IM_AE(object):
 
 	def get_random_latent(self):
 		# return torch.randn(self.z_dim) * (0.2**0.5)
-		return torch.from_numpy(self.zs[0, :])
+		return torch.from_numpy(self.zs[0, :]).to(self.device)
 
 
 	def decode(self, latent_vector):
@@ -717,7 +717,8 @@ class IM_AE(object):
 			idx = np.arange(dimf**3)
 
 		counter = 0
-		gradient = np.zeros((idx.shape[0], self.z_dim))
+		# gradient = np.zeros((idx.shape[0], self.z_dim))
+		gradient = torch.zeros((idx.shape[0], self.z_dim), device=self.device)
 		for i in range(frame_batch_num):
 			mask = (idx >= i * self.test_point_batch_size) & (idx < (i + 1) * self.test_point_batch_size)
 			tmp_idx = idx[mask]	#[N_i, ]
@@ -731,12 +732,14 @@ class IM_AE(object):
 			from torch.func import jacrev, jacfwd
 			tmp_gradient = jacfwd(_forward_model, argnums=0)(z, point_coord)
 			tmp_gradient = tmp_gradient.reshape(-1, self.z_dim)
+			z = z.detach()
+			tmp_gradient = tmp_gradient.detach()
 			# # forward
 			# _, model_out_ = self.im_network(None, z, point_coord, is_training=False)
 			# model_out_ = model_out_.flatten()
 			# # backward
 			# tmp_gradient = torch.autograd.grad(model_out_, latent_vector, torch.ones_like(model_out_))
-			gradient[counter:counter + tmp_gradient.shape[0], :] = tmp_gradient.detach().numpy()
+			gradient[counter:counter + tmp_gradient.shape[0], :] = tmp_gradient
 			counter += tmp_gradient.shape[0]
 		return gradient
 	

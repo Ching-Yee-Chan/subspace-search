@@ -7,6 +7,7 @@ from utils.utils import *
 from utils.QtPlot import QtPlot
 from utils.MyDialog import MyDialog
 
+import torch
 from utils.model_utils import *
 
 from enum import Enum
@@ -136,32 +137,32 @@ class SearchUI(QtWidgets.QWidget):
 
     def update_subspace(self, p):
         self.jacobian = self.model.calc_model_gradient(p.reshape(1, self.latent_size))
-        u, s, vh = np.linalg.svd(self.jacobian, full_matrices=True)
+        u, s, vh = torch.linalg.svd(self.jacobian, full_matrices=True)
 
         num = s.shape[0]
 
         self.jacobian_vhs = vh[:num]
         self.jacobian_s = s[:num]
-        self.jacobian_mask = np.ones(self.jacobian_vhs.shape[0], dtype=bool)
+        self.jacobian_mask = torch.ones(self.jacobian_vhs.shape[0], dtype=bool, device=self.jacobian.device)
 
         self.importance_sampling_subspace_basis()
         # print('end updating subspace!')
 
     def importance_sampling_subspace_basis(self):
         if self.jacobian_s[self.jacobian_mask].shape[0] <= 0:
-            self.jacobian_mask = np.ones(self.jacobian_vhs.shape[0], dtype=bool)
+            self.jacobian_mask = torch.ones(self.jacobian_vhs.shape[0], dtype=bool, device=self.jacobian.device)
 
         s = self.jacobian_s[self.jacobian_mask] + 1e-6
         vh = self.jacobian_vhs[self.jacobian_mask]
 
         # Importance sampling
-        choice_p = s / np.sum(s)
+        choice_p = (s / torch.sum(s)).detach().cpu().numpy()
         idx = np.random.choice(choice_p.shape[0], p=choice_p)
 
         self.subspace_basis = vh[idx]
-        self.subspace_basis = self.subspace_basis.astype(np.float32)
+        # self.subspace_basis = self.subspace_basis.astype(np.float32)
 
-        self.jacobian_mask[np.arange(self.jacobian_vhs.shape[0])[self.jacobian_mask][idx]] = False
+        self.jacobian_mask[torch.arange(self.jacobian_vhs.shape[0], device=self.jacobian.device)[self.jacobian_mask][idx]] = False
 
         # print('Finish sampling subspace!!')
 
